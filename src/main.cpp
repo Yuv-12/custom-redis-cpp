@@ -641,6 +641,39 @@ static void response_end(Buffer &out, size_t header) {
 
 // process 1 request if there is enough data
 static bool try_one_request(Conn *conn) {
+    // Check if it is an HTTP GET request (Render's health check probe)
+    if (conn->incoming.size() >= 4 &&
+        conn->incoming[0] == 'G' &&
+        conn->incoming[1] == 'E' &&
+        conn->incoming[2] == 'T') {
+        
+        // Find the end of the HTTP headers if possible to consume the request
+        size_t req_len = conn->incoming.size();
+        for (size_t i = 0; i + 3 < conn->incoming.size(); ++i) {
+            if (conn->incoming[i] == '\r' && conn->incoming[i+1] == '\n' &&
+                conn->incoming[i+2] == '\r' && conn->incoming[i+3] == '\n') {
+                req_len = i + 4;
+                break;
+            }
+        }
+        
+        // Send a simple HTTP response
+        const char *http_response = 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 2\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "OK";
+        buf_append(conn->outgoing, (const uint8_t *)http_response, strlen(http_response));
+        buf_consume(conn->incoming, req_len);
+        
+        conn->want_read = false;
+        conn->want_write = true;
+        conn->want_close = true;
+        return false; // want close
+    }
+
     // try to parse the protocol: message header
     if (conn->incoming.size() < 4) {
         return false;   // want read
