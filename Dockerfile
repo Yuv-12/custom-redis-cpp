@@ -1,5 +1,6 @@
 # Build stage
-FROM gcc:latest AS builder
+FROM debian:bookworm AS builder
+RUN apt-get update && apt-get install -y g++ make
 WORKDIR /app
 COPY src/ ./src
 COPY Makefile .
